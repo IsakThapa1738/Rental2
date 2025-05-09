@@ -37,7 +37,7 @@ urlpatterns = [
 	
     re_path(r'^user/',include('user.urls')),
     re_path(r'^register', views.register),
-    re_path(r'^login', views.login_view),
+    re_path(r'^login', views.login_view, name ='login'),
     re_path(r'^profile/',views.profile),
     re_path(r'^post/$', views.post),
     re_path(r'^posth/$', views.posth),

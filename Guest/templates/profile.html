@@ -7,7 +7,6 @@
 
 {% block body %}
 <div class="profile-container">
-    <!-- Profile Header -->
     <div class="profile-header">
         <div class="container">
             <h1>My Profile</h1>
@@ -20,10 +19,8 @@
         </div>
     </div>
 
-    <!-- Main Profile Content -->
     <div class="container main-content">
         <div class="row">
-            <!-- Sidebar -->
             <div class="col-md-4 sidebar">
                 <div class="profile-card">
                     <div class="profile-avatar">
@@ -34,7 +31,9 @@
                     </div>
                     <div class="profile-info">
                         <h3>{{ user.name }}</h3>
-                        <p class="text-muted">Premium Member</p>
+                        <p class="text-muted">
+                            {% if user.is_owner %}Property Owner{% else %}Renter{% endif %}
+                        </p>
                         <div class="rating">
                             <i class="fas fa-star"></i>
                             <i class="fas fa-star"></i>
@@ -96,7 +95,6 @@
                 </div>
             </div>
 
-            <!-- Main Content -->
             <div class="col-md-8 content">
                 {% if messages %}
                 <div class="alert-container">
@@ -109,7 +107,7 @@
                 </div>
                 {% endif %}
 
-                <!-- Quick Actions -->
+                {% if user.is_owner %}
                 <div class="quick-actions">
                     <div class="row">
                         <div class="col-md-6">
@@ -136,8 +134,9 @@
                         </div>
                     </div>
                 </div>
+                {% endif %}
 
-                <!-- My Listings -->
+                {% if user.is_owner %}
                 <div class="listings-section">
                     {% if room %}
                     <div class="section-header">
@@ -243,6 +242,46 @@
                     </div>
                     {% endif %}
                 </div>
+                {% endif %}
+
+                {% if not user.is_owner and bookings %}
+                <div class="bookings-section">
+                    <div class="section-header">
+                        <h3>My Recent Bookings</h3>
+                    </div>
+                    <div class="booking-list">
+                        {% for booking in bookings %}
+                        <div class="booking-item">
+                            <p>Booking ID: {{ booking.id }}</p>
+                            <p>Property Type: {{ booking.property_type|capfirst }}</p>
+                            {% if booking.room %}
+                            <p>Apartment: {{ booking.room.location }}, {{ booking.room.city }}</p>
+                            {% elif booking.house %}
+                            <p>House: {{ booking.house.location }}, {{ booking.house.city }}</p>
+                            {% endif %}
+                            <p>Check-in: {{ booking.check_in|date:"F j, Y" }}</p>
+                            <p>Check-out: {{ booking.check_out|date:"F j, Y" }}</p>
+                            <p>Status: <span class="badge {% if booking.status == 'approved' %}bg-success{% elif booking.status == 'rejected' %}bg-danger{% elif booking.status == 'pending' %}bg-warning text-dark{% elif booking.status == 'cancelled' %}bg-secondary{% endif %}">{{ booking.status|capfirst }}</span></p>
+                            <small>Booked on: {{ booking.booking_date|date:"F j, Y H:i" }}</small>
+                        </div>
+                        {% empty %}
+                        <p>No bookings yet.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if not user.is_owner and not bookings %}
+                <div class="empty-state">
+                    <img src="{% static 'assets/no-bookings.svg' %}" alt="No Bookings" class="empty-img">
+                    <h4>No Bookings Yet</h4>
+                    <p>You haven't made any bookings.</p>
+                    <a href="/" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Find Properties
+                    </a>
+                </div>
+                {% endif %}
+
             </div>
         </div>
     </div>

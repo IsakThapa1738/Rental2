@@ -284,107 +284,104 @@ def descr(request):
 #     return render(request, 'login.html', {'msg': ''})
 
 
+# Guest/views.py
+
+from django.shortcuts import render, redirect
+from .forms import RegistrationForm # Assuming you created forms.py in your Guest app
+
 def register(request):
-    if request.method == 'GET':
-        return render(request, 'register.html', {'msg': ''})
-
-    name = request.POST['name']
-    email = request.POST['email']
-    location = request.POST['location']
-    city = request.POST['city']
-    state = request.POST['state']
-    phone = request.POST['phone']
-    pas = request.POST['pass']
-    cpas = request.POST['cpass']
-    regex = r'^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w{2,3}$'
-    if re.search(regex, email):
-        pass
+    if request.method == 'POST':
+        form = RegistrationForm(request.POST)
+        if form.is_valid():
+            user = form.save(commit=False)
+            user.set_password(form.cleaned_data['password'])
+            user.is_owner = form.cleaned_data['is_owner']
+            user.save()
+            login(request, user)
+            return redirect("/profile/")
     else:
-        template = loader.get_template('register.html')
-        context = {'msg': 'invalid email'}
-        return HttpResponse(template.render(context, request))
+        form = RegistrationForm()
+    return render(request, 'register.html', {'form': form, 'msg': ''})
 
-    if len(str(phone)) != 10:
-        template = loader.get_template('register.html')
-        context = {'msg': 'invalid phone number'}
-        return HttpResponse(template.render(context, request))
+# Guest/views.py
 
-    if pas != cpas:
-        template = loader.get_template('register.html')
-        context = {'msg': 'password did not matched'}
-        return HttpResponse(template.render(context, request))
-    already = User.objects.filter(email=email)
-    if bool(already):
-        template = loader.get_template('register.html')
-        context = {'msg': 'email already registered'}
-        return HttpResponse(template.render(context, request))
-    
-    user = User.objects.create_user(
-        name=name,
-        email=email,
-        location=location,
-        city=city,
-        state=state,
-        number=phone,
-        password=pas,
-        )
-    user.save()
-    login(request, user)
-    return redirect("/profile/")
-
-@login_required(login_url='/login')
+@login_required()
 def profile(request):
     report = Contact.objects.filter(email=request.user.email)
-    room = Room.objects.filter(user_email=request.user)
-    house = House.objects.filter(user_email=request.user)
-    roomcnt = room.count()
-    housecnt = house.count()
-    reportcnt = report.count()
-    rooms = []
-    houses = []
-    if bool(room):
-        n = len(room)
-        nslide = n // 3 + (n % 3 > 0)
-        rooms = [room, range(1, nslide), n]
-    if bool(house):
-        n = len(house)
-        nslide = n // 3 + (n % 3 > 0)
-        houses = [house, range(1, nslide), n]
-        
     context = {
         'user': request.user,
         'report': report,
-        'reportno': reportcnt,
-        'roomno': roomcnt,
-        'houseno': housecnt
+        'reportno': report.count(),
     }
-    context.update({'room': rooms})
-    context.update({'house': houses})    
-    return render(request, 'profile.html', context=context)
 
+    if request.user.is_owner:
+        room = Room.objects.filter(user_email=request.user)
+        house = House.objects.filter(user_email=request.user)
+        context.update({
+            'roomno': room.count(),
+            'houseno': house.count(),
+        })
+        if room.exists():
+            n = len(room)
+            nslide = n // 3 + (n % 3 > 0)
+            context.update({'room': [room, range(1, nslide), n]})
+        if house.exists():
+            n = len(house)
+            nslide = n // 3 + (n % 3 > 0)
+            context.update({'house': [house, range(1, nslide), n]})
+        return render(request, 'profile.html', context=context) # Create a separate template for owners
+    else:
+        bookings = Booking.objects.filter(user=request.user).order_by('-booking_date')
+        context.update({'bookings': bookings})
+        return render(request, 'profile.html', context=context) # Create a separate template for customers
+
+# Guest/views.py
+
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from user.models import User, Room
+from django.contrib import messages
 
 @login_required(login_url='/login')
 def post(request):
+    if not request.user.is_owner:
+        messages.error(request, "Only property owners can post rooms.")
+        return redirect('profile') # Redirect to profile or another appropriate page
+
     if request.method == "GET":
         context = {'user': request.user}
         return render(request, 'post.html', context)
     elif request.method == "POST":
         try:
-            dimention = request.POST['dimention']
-            location = request.POST['location'].lower()
-            city = request.POST['city'].lower()
-            state = request.POST['state'].lower()
-            cost = request.POST['cost']
-            hall = request.POST['hall'].lower()
-            kitchen = request.POST['kitchen'].lower()
-            balcany = request.POST['balcany'].lower()
-            bedroom = request.POST['bedroom']
-            ac = request.POST['AC'].lower()
-            desc = request.POST['desc'].upper()
-            img = request.FILES['img']
-            user_obj = User.objects.filter(email=request.user.email)[0]
-            bedroom = int(bedroom)
-            cost = int(cost)
+            dimention = request.POST.get('dimention', '').strip()
+            location = request.POST.get('location', '').lower().strip()
+            city = request.POST.get('city', '').lower().strip()
+            state = request.POST.get('state', '').lower().strip()
+            cost_str = request.POST.get('cost', '').strip()
+            hall = request.POST.get('hall', '').lower().strip()
+            kitchen = request.POST.get('kitchen', '').lower().strip()
+            balcany = request.POST.get('balcany', '').lower().strip()
+            bedroom_str = request.POST.get('bedroom', '').strip()
+            ac = request.POST.get('AC', '').lower().strip()
+            desc = request.POST.get('desc', '').upper().strip()
+            img = request.FILES.get('img')
+
+            # Validate required fields
+            if not all([dimention, location, city, state, cost_str, bedroom_str, img]):
+                messages.error(request, "Please fill in all required fields.")
+                return render(request, 'post.html', {'user': request.user, 'form_data': request.POST})
+
+            try:
+                bedroom = int(bedroom_str)
+                cost = int(cost_str)
+                if bedroom <= 0 or cost <= 0:
+                    messages.error(request, "Bedroom and cost must be positive numbers.")
+                    return render(request, 'post.html', {'user': request.user, 'form_data': request.POST})
+            except ValueError:
+                messages.error(request, "Invalid value for bedroom or cost. Please enter numbers.")
+                return render(request, 'post.html', {'user': request.user, 'form_data': request.POST})
+
+            user_obj = request.user
             room = Room.objects.create(
                 user_email=user_obj,
                 dimention=dimention,
@@ -400,11 +397,14 @@ def post(request):
                 desc=desc,
                 img=img,
             )
-            messages.success(request, 'submitted successfully..')
-            return render(request, 'post.html')
+            messages.success(request, 'Apartment/Room details submitted successfully.')
+            return redirect('/profile/') # Redirect to the user's profile page
         except Exception as e:
-            return HttpResponse(status=500)
+            messages.error(request, f"An error occurred while submitting: {e}")
+            return render(request, 'post.html', {'user': request.user, 'form_data': request.POST})
 
+    # If it's a GET request and the user is an owner, display the form
+    return render(request, 'post.html', {'user': request.user})
 
 @login_required(login_url='/login')
 def posth(request):
@@ -428,7 +428,8 @@ def posth(request):
             img = request.FILES['img']
             bedroom = int(bedroom)
             cost = int(cost)
-            user_obj = User.objects.filter(email=request.user.email)[0]
+            user_obj = request.user  # Use request.user directly
+
             house = House.objects.create(
                 user_email=user_obj,
                 location=location,
@@ -445,13 +446,13 @@ def posth(request):
                 desc=desc,
                 img=img,
             )
-            messages.success(request, 'submitted successfully..')
-            return render(request, 'posth.html')
+            messages.success(request, 'House details submitted successfully.')
+            return redirect('/profile/')  # Redirect to the user's profile page
+
         except Exception as e:
-            print()
-            print(e)
-            print()
-            return HttpResponse(status=500)
+            print("\nError saving house:", e, "\n")
+            messages.error(request, f"An error occurred while submitting: {e}")
+            return render(request, 'posth.html', {'user': request.user, 'form_data': request.POST})
 
 def deleter(request):
     if request.method == 'GET':

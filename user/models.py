@@ -10,7 +10,7 @@ from django.contrib.auth.models import UserManager
 
 class UserManager(BaseUserManager):
 
-    def create_user(self, email, name, location, city, state, number, password=None, is_admin=False, is_staff=False, is_active=True):
+    def create_user(self, email, name, location, city, state, number, password=None, is_owner= False, is_admin=False, is_staff=False, is_active=True):
         if not email:
             raise ValueError('User must have an email')
         if not password:
@@ -27,6 +27,7 @@ class UserManager(BaseUserManager):
         user.number = number
         user.is_superuser = is_admin
         user.is_staff = is_staff
+        user.is_owner = is_owner
         user.is_active = is_active
         user.save(using=self._db)
         return user
@@ -44,6 +45,7 @@ class UserManager(BaseUserManager):
         user.number = number
         user.set_password(password)
         user.admin = True
+        user.is_owner = True
         user.is_superuser = True
         
         
@@ -62,10 +64,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     location = models.CharField(max_length=50)
     city = models.CharField(max_length=50)
     state = models.CharField(max_length=50)
-    number = models.IntegerField()
+    number = models.IntegerField(max_length=10)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)  # a admin user; non super-user
     is_superuser = models.BooleanField(default=False)
+    is_owner = models.BooleanField(default=False)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['name', 'number']
@@ -73,6 +76,11 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
+    
+    @property
+    def is_admin(self):
+        return self.is_superuser
+
 
    
 
