@@ -286,22 +286,49 @@ def descr(request):
 
 # Guest/views.py
 
+from django.contrib.auth import login
 from django.shortcuts import render, redirect
-from .forms import RegistrationForm # Assuming you created forms.py in your Guest app
+from user.models import User
+from django.contrib import messages
 
 def register(request):
     if request.method == 'POST':
-        form = RegistrationForm(request.POST)
-        if form.is_valid():
-            user = form.save(commit=False)
-            user.set_password(form.cleaned_data['password'])
-            user.is_owner = form.cleaned_data['is_owner']
-            user.save()
+        try:
+            # Get all form data
+            email = request.POST.get('email')
+            name = request.POST.get('name')
+            password = request.POST.get('password')
+            number = request.POST.get('number')
+            location = request.POST.get('location')
+            city = request.POST.get('city')
+            state = request.POST.get('state')
+            is_owner = request.POST.get('is_owner') == 'on'  # Checkbox handling
+
+            # Create user using your custom UserManager
+            user = User.objects.create_user(
+                email=email,
+                name=name,
+                password=password,
+                number=number,
+                location=location,
+                city=city,
+                state=state,
+                is_owner=is_owner
+            )
+
+            # Log the user in
             login(request, user)
-            return redirect("/profile/")
-    else:
-        form = RegistrationForm()
-    return render(request, 'register.html', {'form': form, 'msg': ''})
+            return redirect('/profile/')
+
+        except Exception as e:
+            # Show error message if registration fails
+            return render(request, 'register.html', {
+                'msg': str(e),
+                'form_data': request.POST  # Pass back form data to repopulate fields
+            })
+
+    # GET request - show empty form
+    return render(request, 'register.html', {'msg': ''})
 
 # Guest/views.py
 
